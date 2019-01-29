@@ -1,4 +1,5 @@
 const prog_id = 'qoo10'
+const rate = 1;
 require('dotenv').config();
 const yargs = require('yargs')
       .usage('Usage: $0 [options]')
@@ -51,7 +52,14 @@ const options = {
 
   try {
     await login(page);
+    const prevPoint = await getCurrentPoint(page);
     await qchance(page);
+    const currPoint = await getCurrentPoint(page);
+    const earnedPoint = calcEarnedPoint(prevPoint, currPoint);
+    if (earnedPoint !== 0.0) {
+      const earnedYen = calcEarnedYen(earnedPoint, rate);
+      logger.info(`${earnedPoint}pt（${earnedYen}円）を獲得しました`);
+    }
 
     // ログインページ
     async function login(page) {
@@ -69,17 +77,31 @@ const options = {
         page.click('form a.btn')
       ]);
     }
+
+    // 現在ポイントを取得
+    async function getCurrentPoint(page) {
+      logger.debug('getCurrentPoint()');
+      await page.goto('https://www.qoo10.jp/gmkt.inc/Event/qchance.aspx', {waitUntil: "domcontentloaded"});
+
+      let nQpointText = await page.$eval('div.info_my tr#tr_loyalty_summary td:nth-child(3)', el => el.textContent);
+      nQpointText = nQpointText.replace(/[,\s]*/g, '');
+      const nQpoint = parseInt(nQpointText, 10);
+
+      let nMameqText = await page.$eval('div.info_my tr#tr_loyalty_summary td span.grn', el => el.textContent);
+      nMameqText = nMameqText.replace(/^[A-Za-z\s]*/g, '');
+      const nMameq = parseInt(nMameqText, 10);
+
+      return nQpoint+nMameq;
+    }
+
     async function qchance(page) {
       logger.debug('qchance()');
       await page.goto('https://www.qoo10.jp/gmkt.inc/Event/qchance.aspx');
-      logger.debug('1');
       await page.waitForSelector('iframe[src*="/Roulette/"]', {visible:true});
-      logger.debug('0');
       const frame = await waitForFrame(page, f => /\/RouletteQ\.aspx/.test(f.url()));
 
       // 応募券クリック
       try {
-        logger.debug('99');
         await frame.waitForSelector('div.card_table a',
                                    {visible: true, timeout: 10000})
           .then(el => el.click());
@@ -92,11 +114,9 @@ const options = {
       // ルーレット
       const rFrame = await waitForFrame(page, f => /\/Roulette\.aspx/.test(f.url()));
       try {
-        logger.debug('88');
         await rFrame.waitForSelector('img#btn_start',
                                      {visible: true, timeout: 10000})
           .then(el => el.click());
-        logger.debug('77');
         await frame.waitFor(5000); // 5秒待ち
       } catch (e) {
         if (!(e instanceof TimeoutError)) { throw e; }
@@ -118,6 +138,16 @@ const options = {
           page.once('framenavigated', checkFrame);
         }
       }
+    }
+    function calcEarnedPoint(prevPoint, currPoint) {
+      // 小数第2位まで有効の前提
+      // 返り値は浮動小数点数
+      return +((currPoint - prevPoint).toFixed(2));
+    }
+    function calcEarnedYen(earnedPoint, rate) {
+      // 小数第2位まで有効の前提
+      // 返り値は浮動小数点数
+      return +((earnedPoint * rate).toFixed(2));
     }
   } catch (e) {
     logger.error(e);
