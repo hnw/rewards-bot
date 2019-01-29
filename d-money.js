@@ -1,4 +1,5 @@
 const prog_id = 'd-money'
+const rate = 1;
 require('dotenv').config();
 const yargs = require('yargs')
       .usage('Usage: $0 [options]')
@@ -51,7 +52,14 @@ const options = {
 
   try {
     await login(page);
+    const prevPoint = await getCurrentPoint(page);
     await scratch(page);
+    const currPoint = await getCurrentPoint(page);
+    const earnedPoint = calcEarnedPoint(prevPoint, currPoint);
+    if (earnedPoint !== 0.0) {
+      const earnedYen = calcEarnedYen(earnedPoint, rate);
+      logger.info(`${earnedPoint}pt（${earnedYen}円）を獲得しました`);
+    }
 
     // ログインページ
     async function login(page) {
@@ -72,26 +80,51 @@ const options = {
       ]);
     }
 
+    // 現在ポイントを取得
+    async function getCurrentPoint(page) {
+      logger.debug('getCurrentPoint()');
+      await page.goto('http://d-moneymall.jp/', {waitUntil: "domcontentloaded"});
+
+      let nPointText = await page.$eval('div.p-dmoney-header-small__amount span.p-dmoney-header-small__amount__balance', el => el.textContent);
+      nPointText = nPointText.replace(/[,\s]/g, '');
+      const nPoint = parseInt(nPointText, 10);
+      return nPoint;
+    }
+
+    // スクラッチで必ず１マネー
     async function scratch(page) {
       await Promise.all([
         page.waitForNavigation({waitUntil: "domcontentloaded"}),
         page.waitForSelector('a[href*="/scratch"]', {visible: true}).then(el => el.click()),
       ]);
-      await page.waitForSelector('body.body-ScratchPlay', {visible: true, timeout: 10000})
+      try {
+        await page.waitForSelector('body.body-ScratchPlay', {visible: true, timeout: 10000})
+      } catch (e) {
+        if (!(e instanceof TimeoutError)) { throw e; }
+        // 今日はすでに実行済み
+        logger.debug(e.message);
+        return;
+      }
+
       // 特定の位置をクリック
       await page.waitFor(3000) // 3秒待ち
       await page.mouse.click(650, 395);
-      logger.debug('650-395');
       await page.waitFor(3000) // 3秒待ち
       await page.mouse.click(500, 395);
-      logger.debug('500-395');
       await page.waitFor(3000) // 3秒待ち
       await page.mouse.click(400, 295);
-      logger.debug('400-295');
       await page.waitFor(3000) // 3秒待ち
       await page.mouse.click(500, 295);
-      logger.debug('500-295');
-      
+    }
+    function calcEarnedPoint(prevPoint, currPoint) {
+      // 小数第2位まで有効の前提
+      // 返り値は浮動小数点数
+      return +((currPoint - prevPoint).toFixed(2));
+    }
+    function calcEarnedYen(earnedPoint, rate) {
+      // 小数第2位まで有効の前提
+      // 返り値は浮動小数点数
+      return +((earnedPoint * rate).toFixed(2));
     }
   } catch (e) {
     logger.error(e);
