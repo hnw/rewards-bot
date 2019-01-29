@@ -80,7 +80,6 @@ const options = {
       await page.goto('https://www.pointtown.com/ptu/mypage/top.do');
 
       // GMOログインページ
-      logger.debug(1);
       await page.waitForSelector('form[name="LineLoginForm"]', {visible: true})
         .then(el => el.click());
       await line_login(page);
@@ -89,16 +88,9 @@ const options = {
       const birthday = new Date(process.env.POINTTOWN_BIRTHDAY);
       await page.waitForSelector('input[name="answer"]', {visible: true})
         .then(el => el.type(secretAnswer));
-      console.log(5);
-      console.log(birthday.getFullYear());
       await page.type('input[name="birth_year"]', birthday.getFullYear()+'');
-      console.log(6);
-      console.log(birthday.getMonth()+1+'');
       await page.select('select[name="birth_month"]', birthday.getMonth()+1+'');
-      console.log(7);
-      console.log(birthday.getDate()+'');
       await page.select('select[name="birth_day"]', birthday.getDate()+'');
-      console.log(8);
       await Promise.all([
         page.waitForNavigation({waitUntil: "domcontentloaded"}),
         page.click('input[type="image"]')
@@ -107,6 +99,8 @@ const options = {
 
     // LINEログイン
     async function line_login(page) {
+      logger.debug('line_login()');
+
       const id = process.env.LINE_ID;
       const password = process.env.LINE_PASSWORD;
       
